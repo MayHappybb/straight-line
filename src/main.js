@@ -7,12 +7,14 @@ import { ChartGroup, escapeHtml } from './ui/charts.js';
 import { TrackView } from './ui/track.js';
 import { encodeState, decodeState } from './ui/share.js';
 import { EXAMPLES } from './examples.js';
-import { makeTask, TRACK_LENGTHS, DEFAULT_TRACK } from './sim/runner.js';
+import { TRACK_LENGTHS, DEFAULT_TRACK, LEADERBOARD, aggregate } from './sim/runner.js';
+import { createLeaderboard } from './ui/leaderboard.js';
 import { NOMINAL, makeCar } from './sim/car.js';
 
 const $ = (id) => document.getElementById(id);
 const BENCH_SEEDS = Array.from({ length: 20 }, (_, i) => i + 1);
 const BENCH_POWER_ON = 1; // fixed, so the same code always gets the same score
+const REPO = 'MayHappybb/straight-line'; // where leaderboard submissions are scored
 const STORAGE_KEY = 'straight-line.controller.py';
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -107,6 +109,7 @@ const els = {
   zoom: $('zoom'),
   csv: $('csv'),
   evalBody: $('evalBody'),
+  lbBody: $('lbBody'),
   carBody: $('carBody'),
 };
 
@@ -270,6 +273,7 @@ async function run(seed = carSeed(), powerOn = null) {
   try {
     const msg = await engine.request('run', { code: editor.value, carSeed: seed, runSeed, trackLength: L, noise });
     showRun(msg.out);
+    if (msg.tampered) restartAfterTampering();
   } catch (e) {
     consoleLine('error', e.message);
     renderTiles(null, e.message);
@@ -322,7 +326,7 @@ function renderTiles(r, errorText) {
     els.tiles.innerHTML =
       cell('Off the line at the finish', `${fmtSigned(r.finishY * 100, 2)}<small>cm</small>`, `<span class="status good">Finished, car ${r.carSeed}, power-on ${r.runSeed}</span>`, true) +
       cell('Heading at the finish', `${fmtSigned(r.finishHeading, 2)}<small>°</small>`, 'positive is to the left') +
-      cell('Widest off the line', widest, 'anywhere on the way') +
+      cell('Path RMSE', `${r.pathRmseCm.toFixed(2)}<small>cm</small>`, `widest ${(r.maxAbsY * 100).toFixed(1)} cm`) +
       cell('Time to finish', `${r.finishTime.toFixed(2)}<small>s</small>`, `limit ${TASK.timeLimit} s from power-on`);
   } else {
     const why =
@@ -335,8 +339,8 @@ function renderTiles(r, errorText) {
     els.tiles.innerHTML =
       cell('Result', r.endReason === 'off track' ? 'Off track' : r.endReason === 'error' ? 'Error' : 'Too slow', why, true) +
       cell('Distance covered', `${Math.max(0, dist).toFixed(2)}<small>m</small>`, `of ${TASK.trackLength} m`) +
-      cell('Widest off the line', widest, '') +
-      cell('Benchmark counts it as', `${TASK.dnfPenaltyCm}<small>cm</small>`, 'when a car does not finish');
+      cell('Path RMSE', `${r.pathRmseCm.toFixed(2)}<small>cm</small>`, `the rest of the track counts as ${TASK.offTrack} m off`) +
+      cell('Widest off the line', widest, '');
   }
 }
 
@@ -463,6 +467,7 @@ async function evaluate() {
       },
     );
     renderEval(msg.results);
+    if (msg.tampered) restartAfterTampering();
   } catch (e) {
     els.evalBody.innerHTML = `<p><span class="status bad">Benchmark stopped.</span> ${escapeHtml(e.message)}</p>`;
   } finally {
@@ -477,13 +482,8 @@ function renderEval(results) {
     els.evalBody.innerHTML = `<p><span class="status bad">Your controller stopped with an error on car ${results[0].carSeed}.</span></p><pre class="console">${escapeHtml(results[0].error)}</pre>`;
     return;
   }
-  const scores = results.map((r) => r.scoreCm);
-  const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-  const sorted = [...scores].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)];
-  const finished = results.filter((r) => r.finished).length;
-  const worst = Math.max(...scores);
-  const maxBar = Math.max(worst, 0.01);
+  const agg = aggregate(results);
+  const maxBar = Math.max(...results.map((r) => r.pathRmseCm), 0.01);
   const rows = results
     .map((r) => {
       const status = r.finished ? '' : r.endReason === 'error' ? 'Error' : r.endReason === 'off track' ? 'Off track' : 'Too slow';
@@ -493,22 +493,23 @@ function renderEval(results) {
         <td class="l">${r.finished ? '<span class="status good">Finished</span>' : `<span class="status bad">${status}</span>`}</td>
         <td>${off}</td>
         <td>${r.finished ? fmtSigned(r.finishHeading, 2) : '—'}</td>
-        <td>${r.finished ? r.finishTime.toFixed(2) : '—'}</td>
-        <td class="l"><div class="bar-cell"><div class="meter-track"><div class="meter${r.finished ? '' : ' dnf'}" style="width:${Math.max(1, (r.scoreCm / maxBar) * 100)}%"></div></div><span>${r.scoreCm.toFixed(2)}</span></div></td>
+        <td>${r.finished ? r.finishTime.toFixed(1) : '—'}</td>
+        <td class="l"><div class="bar-cell"><div class="meter-track"><div class="meter${r.finished ? '' : ' dnf'}" style="width:${Math.max(1, (r.pathRmseCm / maxBar) * 100)}%"></div></div><span>${r.pathRmseCm.toFixed(2)}</span></div></td>
       </tr>`;
     })
     .join('');
+  const isLeaderboardRules = task.trackLength === LEADERBOARD.trackLength && noise === LEADERBOARD.noise;
   els.evalBody.innerHTML = `
     <div class="score">
-      <div class="num">${mean.toFixed(2)}<small>cm</small></div>
-      <p class="desc">Average distance from the line at the finish over cars 1 to 20 on the ${task.trackLength} m track with noise ${noise}×. Each car gets power-on ${BENCH_POWER_ON}, so the same code always scores the same. A car that does not finish counts as ${task.dnfPenaltyCm} cm. Lower is better.</p>
+      <div class="num">${agg.pathRmseCm.toFixed(2)}<small>cm</small></div>
+      <p class="desc">Path RMSE: how far from the line the car was, on average, over every centimetre of cars 1 to 20 on the ${task.trackLength} m track with noise ${noise}×. Lower is better. ${isLeaderboardRules ? 'These are the leaderboard rules, on public cars instead of hidden ones.' : ''}</p>
     </div>
-    <div class="score"><div class="facts"><span>Finished <b>${finished} of ${results.length}</b></span><span>Median <b>${median.toFixed(2)} cm</b></span><span>Worst <b>${worst.toFixed(2)} cm</b></span></div></div>
+    <div class="score"><div class="facts"><span>Finish RMSE <b>${agg.finishRmseCm.toFixed(2)} cm</b></span><span>Finished <b>${agg.finished} of ${agg.runs}</b></span></div></div>
     <table class="data">
-      <thead><tr><th class="l">Car</th><th class="l">Result</th><th>Off the line, cm</th><th>Heading, °</th><th>Time, s</th><th class="l">Score, cm</th></tr></thead>
+      <thead><tr><th class="l">Car</th><th class="l">Result</th><th>At the finish, cm</th><th>Heading, °</th><th>Time, s</th><th class="l">Path RMSE, cm</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p class="note">Select a car to replay its benchmark run.</p>`;
+    <p class="note">Each car gets power-on ${BENCH_POWER_ON}, so the same code always scores the same. A car that leaves the track or stops counts as ${task.offTrack} m off for the rest of the way. Select a car to replay its run.</p>`;
   for (const tr of els.evalBody.querySelectorAll('tr.clickable')) {
     const go = () => {
       setTrackLength(task.trackLength);
@@ -525,6 +526,36 @@ function renderEval(results) {
     });
   }
 }
+
+function renderEvalEmpty() {
+  els.evalBody.innerHTML = `
+    <p>Benchmark runs your controller on cars 1 to 20 with the track length and noise above, and ranks the result by path RMSE: how far from the line the car was over the whole drive.</p>
+    <div><button type="button" class="btn" id="tryRules">Benchmark under the leaderboard rules (${LEADERBOARD.trackLength} m, noise ${LEADERBOARD.noise}×)</button></div>`;
+  $('tryRules').addEventListener('click', tryLeaderboardRules);
+}
+
+function tryLeaderboardRules() {
+  setTrackLength(LEADERBOARD.trackLength);
+  els.noise.value = LEADERBOARD.noise;
+  updateNoiseLabel();
+  evaluate();
+}
+
+/** Controller code reached into JavaScript and changed a built-in the simulator relies on. */
+function restartAfterTampering() {
+  consoleLine('warn', 'Your code changed JavaScript built-ins that the simulator uses, so these results are not trustworthy. Python has been restarted with a clean simulator.');
+  engineReady = false;
+  setBusy(false);
+  engine.restart();
+}
+
+const leaderboard = createLeaderboard({
+  container: els.lbBody,
+  repo: REPO,
+  getCode: () => editor.value,
+  onTryRules: tryLeaderboardRules,
+  toast,
+});
 
 // ---- this car ------------------------------------------------------------------------------
 
@@ -665,6 +696,7 @@ function selectTab(id) {
     $(tab.getAttribute('aria-controls')).hidden = !on;
   }
   if (id === 't-charts') charts.drawAll();
+  if (id === 't-lb') leaderboard.load();
 }
 for (const tab of tabs) {
   tab.addEventListener('click', () => selectTab(tab.id));
@@ -691,6 +723,7 @@ document.addEventListener('keydown', (e) => {
 els.run.title = 'Run on this car (Ctrl/⌘ + Enter)';
 els.evaluate.title = 'Run on cars 1 to 20 (Ctrl/⌘ + Shift + Enter)';
 renderTiles(null);
+renderEvalEmpty();
 updateNoiseLabel();
 updatePowerOnNote();
 setBusy(false);

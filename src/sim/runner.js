@@ -1,10 +1,12 @@
 // Runs one episode: power on, call the controller's setup()/loop(), integrate physics and the IMU,
 // and judge how straight the car went. Pure JS, no DOM: runs in a Web Worker or under Node.
 //
-// The controller is language-agnostic (Python via Pyodide in the app, plain JS in tests):
+// The controller is language-agnostic (Python via Pyodide in the app, plain JS in tests,
+// sandboxed CPython over a pipe for the leaderboard):
 //   begin(hw)        -> error string | null   (compile; hw is the hardware bridge below)
 //   setup()          -> error string | null
 //   loop(t, sample)  -> error string | null   (sample: Float64Array, see Mpu6050.readSample)
+// runEpisode() calls them synchronously, runEpisodeAsync() awaits them.
 
 import { makeCar, makePowerOn, CarSim } from './car.js';
 import { Mpu6050 } from './mpu6050.js';
@@ -31,18 +33,82 @@ const MAX_LOG_LINES = 400;
 const MAX_PLOT_POINTS = 50000;
 export const MAX_PLOT_CHANNELS = 8;
 
+const PATH_BIN = 0.01; // m: path deviation is sampled every centimetre of forward progress
+
+/** Leaderboard rules: the longest track, realistic noise, many hidden cars. */
+export const LEADERBOARD = { trackLength: 32, noise: 1, runs: 30 };
+
+/**
+ * Summary over many runs, the same for the Benchmark tab and the leaderboard.
+ * pathRmseCm: RMS distance from the line over every centimetre of every run (the ranking index).
+ * finishRmseCm: RMS distance from the line at the finish.
+ * Not finishing counts as the off-track distance for the rest of the track (and at the finish).
+ */
+export function aggregate(results) {
+  const n = results.length || 1;
+  const ms = (f) => Math.sqrt(results.reduce((a, r) => a + f(r) ** 2, 0) / n);
+  return {
+    runs: results.length,
+    finished: results.filter((r) => r.finished).length,
+    pathRmseCm: ms((r) => r.pathRmseCm),
+    finishRmseCm: ms((r) => r.scoreCm),
+  };
+}
+
 const TRACE_FIELDS = ['t', 'x', 'y', 'psi', 'v', 'r', 'dutyL', 'dutyR', 'wL', 'wR', 'temp', 'gyroZ', 'vbat', 'caster'];
 
 /**
  * @param {object} opt
- * @param {object} opt.controller   see header comment
+ * @param {object} opt.controller   see header comment (runEpisode / runEpisodeAsync only)
  * @param {number} opt.carSeed      which car (manufacturing tolerances)
  * @param {number} opt.runSeed      which power-on (turn-on bias, caster, battery, noise sequence)
  * @param {number} opt.noise        scale of all random noise, 1 = realistic
  * @param {number} opt.trackLength  m
  * @param {boolean} opt.record      keep traces for playback/plots
  */
-export function runEpisode({ controller, carSeed, runSeed = 0, noise = 1, trackLength = DEFAULT_TRACK, record = true }) {
+export function runEpisode(opt) {
+  const c = opt.controller;
+  const call = (fn) => {
+    try {
+      const r = fn();
+      return typeof r === 'string' ? r : null;
+    } catch (e) {
+      return errorText(e);
+    }
+  };
+  const gen = episode(opt);
+  let step = gen.next();
+  while (!step.done) {
+    const q = step.value;
+    step = gen.next(call(() => (q.op === 'loop' ? c.loop(q.t, q.sample) : q.op === 'setup' ? c.setup() : c.begin(q.hw))));
+  }
+  return step.value;
+}
+
+/** Same as runEpisode, for controllers whose methods return promises. */
+export async function runEpisodeAsync(opt) {
+  const c = opt.controller;
+  const call = async (fn) => {
+    try {
+      const r = await fn();
+      return typeof r === 'string' ? r : null;
+    } catch (e) {
+      return errorText(e);
+    }
+  };
+  const gen = episode(opt);
+  let step = gen.next();
+  while (!step.done) {
+    const q = step.value;
+    step = gen.next(await call(() => (q.op === 'loop' ? c.loop(q.t, q.sample) : q.op === 'setup' ? c.setup() : c.begin(q.hw))));
+  }
+  return step.value;
+}
+
+const errorText = (e) => (e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+
+/** The episode as a generator: it yields each controller call it needs and receives the error (or null). */
+function* episode({ carSeed, runSeed = 0, noise = 1, trackLength = DEFAULT_TRACK, record = true }) {
   const TASK = makeTask(trackLength);
   const car = makeCar(carSeed);
   const powerOn = makePowerOn(car, runSeed);
@@ -116,15 +182,6 @@ export function runEpisode({ controller, carSeed, runSeed = 0, noise = 1, trackL
     error: null,
   };
 
-  const call = (fn) => {
-    try {
-      const r = fn();
-      return typeof r === 'string' ? r : null;
-    } catch (e) {
-      return e instanceof Error ? `${e.name}: ${e.message}` : String(e);
-    }
-  };
-
   const trace = record ? Object.fromEntries(TRACE_FIELDS.map((k) => [k, []])) : null;
   const fail = (err, where) => {
     result.error = err;
@@ -132,8 +189,12 @@ export function runEpisode({ controller, carSeed, runSeed = 0, noise = 1, trackL
     log('error', where ? `${err}\n(${where})` : err);
   };
 
-  let err = call(() => controller.begin(hw));
-  if (!err) err = call(() => controller.setup());
+  const nBins = Math.round(TASK.trackLength / PATH_BIN);
+  let bins = 0;
+  let sumSq = 0;
+
+  let err = yield { op: 'begin', hw };
+  if (!err) err = yield { op: 'setup' };
   if (err) {
     fail(err, null);
     return finish();
@@ -152,7 +213,7 @@ export function runEpisode({ controller, carSeed, runSeed = 0, noise = 1, trackL
     if (t + 1e-9 >= nextLoop) {
       nextLoop += loopPeriod;
       imu.readSample(sample);
-      err = call(() => controller.loop(t, sample));
+      err = yield { op: 'loop', t, sample };
       if (err) {
         fail(err, `in loop() at t = ${t.toFixed(3)} s`);
         break;
@@ -183,6 +244,10 @@ export function runEpisode({ controller, carSeed, runSeed = 0, noise = 1, trackL
 
     const ay = Math.abs(sim.y);
     if (ay > result.maxAbsY) result.maxAbsY = ay;
+    while (bins < nBins && sim.x >= (bins + 1) * PATH_BIN) {
+      sumSq += sim.y * sim.y;
+      bins++;
+    }
 
     if (sim.x >= TASK.trackLength && prevX < TASK.trackLength) {
       const f = (TASK.trackLength - prevX) / (sim.x - prevX);
@@ -204,6 +269,9 @@ export function runEpisode({ controller, carSeed, runSeed = 0, noise = 1, trackL
 
   function finish() {
     result.scoreCm = result.finished ? Math.abs(result.finishY) * 100 : TASK.dnfPenaltyCm;
+    // The part of the track the car never covered counts as being off track.
+    const missing = nBins - bins;
+    result.pathRmseCm = Math.sqrt((sumSq + missing * TASK.offTrack ** 2) / nBins) * 100;
     result.duration = t;
     if (record) result.powerOn = { ...powerOn, gyroTurnOn: imu.turnOn[2] };
     return { result, logs, plots: record ? plots : null, trace, car: record ? car : null };

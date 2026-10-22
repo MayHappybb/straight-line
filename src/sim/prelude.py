@@ -9,6 +9,9 @@ from collections import namedtuple
 import _hw  # JS bridge, provided by the simulator
 
 FILENAME = "controller.py"
+# Bridges to the host. The leaderboard runs standard CPython, where these do not exist, so they
+# are blocked in the browser too: code that works here works there.
+BLOCKED_MODULES = {"js", "pyodide", "pyodide_js", "_hw", "micropip"}
 DLPF_CHOICES = (256, 188, 98, 42, 20, 10, 5)
 
 Sample = namedtuple("Sample", "t seq gyro accel temp")
@@ -105,11 +108,19 @@ def _format(e):
     return "\n".join(lines + [msg])
 
 
+def _guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if level == 0 and name.split(".")[0] in BLOCKED_MODULES:
+        raise ImportError(f"{name} is not available to controllers: only the standard library is")
+    return builtins.__import__(name, globals, locals, fromlist, level)
+
+
 def _begin(code):
     imu = IMU()
+    safe_builtins = dict(builtins.__dict__)
+    safe_builtins["__import__"] = _guarded_import
     ns = {
         "__name__": "__main__",
-        "__builtins__": builtins,
+        "__builtins__": safe_builtins,
         "imu": imu,
         "motors": Motors(),
         "now": now,

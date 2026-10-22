@@ -1,0 +1,21 @@
+name: Leaderboard submission
+description: Score your controller on 30 hidden cars on the 32 m track.
+title: Leaderboard submission
+labels: [leaderboard]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Paste your `controller.py` below and submit. A bot runs it on 30 cars you have never seen, on the 32 m track with realistic noise, and replies here with your score in a few minutes. Your best entry is the one that counts.
+
+        Ranked by **path RMSE**: how far from the line the car is, on average, over every centimetre of every run. Lower is better. A car that leaves the track or stops counts as 8 m off for the rest of the way.
+
+        This issue, and the code in it, is public.
+  - type: textarea
+    id: code
+    attributes:
+      label: controller.py
+      description: Standard Python 3, standard library only. Use the same code that runs in the simulator.
+      render: python
+    validations:
+      required: true

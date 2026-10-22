@@ -1,0 +1,133 @@
+# Scores leaderboard submissions (issues opened from the "Leaderboard submission" form).
+#
+# Safety: the submitted code only ever runs inside a Docker container with no network, no
+# capabilities, a read-only filesystem and an unprivileged user. It talks to the scorer over a pipe
+# and never sees the secret or the cars. The scoring job can only read the repository; a separate
+# job with write access records the score the scorer computed.
+#
+# Never put ${{ github.event.issue.* }} directly into a `run:` script: it is attacker-controlled
+# text. It is always passed through environment variables instead.
+name: Leaderboard
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      example:
+        description: Score one of the built-in examples (dry run, nothing is recorded)
+        default: starter
+
+permissions: {}
+
+jobs:
+  score:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'leaderboard')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    concurrency:
+      group: leaderboard-score-${{ github.event.issue.user.login || 'dry-run' }}
+      cancel-in-progress: false
+    outputs:
+      result: ${{ steps.score.outputs.result }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+
+      - name: Prepare the sandbox
+        run: |
+          docker pull --quiet "$(node -p "require('fs').readFileSync('leaderboard/sandbox/IMAGE','utf8').trim()")"
+          docker image ls --digests python
+
+      - name: Score in the sandbox
+        id: score
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          EXAMPLE: ${{ inputs.example }}
+          LEADERBOARD_SECRET: ${{ secrets.LEADERBOARD_SECRET }}
+        run: |
+          if ! node leaderboard/extract.mjs > "$RUNNER_TEMP/controller.py"; then
+            echo 'result={"ok":false,"runs":0,"error":"No code found. The issue needs a ```python block with your controller: use the Submit button in the simulator, or paste your code into the form."}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node leaderboard/score.mjs --code "$RUNNER_TEMP/controller.py" --out "$RUNNER_TEMP/result.json"
+          echo "result=$(cat "$RUNNER_TEMP/result.json")" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: score
+    if: always() && github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'leaderboard')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      actions: write
+    concurrency:
+      group: leaderboard-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: leaderboard
+          path: data
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+
+      - name: Record the score
+        id: record
+        env:
+          RESULT: ${{ needs.score.outputs.result }}
+          LB_USER: ${{ github.event.issue.user.login }}
+          LB_AVATAR: ${{ github.event.issue.user.avatar_url }}
+          LB_ISSUE_URL: ${{ github.event.issue.html_url }}
+          LB_SUBMITTED_AT: ${{ github.event.issue.created_at }}
+          LB_FILE: data/leaderboard.json
+          LB_COMMENT: ${{ runner.temp }}/comment.md
+          LB_SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: echo "outcome=$(node leaderboard/publish.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Commit the leaderboard
+        if: steps.record.outputs.outcome == 'accepted' || steps.record.outputs.outcome == 'improved'
+        working-directory: data
+        env:
+          LB_USER: ${{ github.event.issue.user.login }}
+        run: |
+          git config user.name "leaderboard-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add leaderboard.json
+          git commit -m "Leaderboard: entry from $LB_USER"
+          git push
+
+      - name: Reply and close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          OUTCOME: ${{ steps.record.outputs.outcome }}
+        run: |
+          gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/comment.md"
+          if [ "$OUTCOME" = rejected ]; then
+            gh issue close "$ISSUE" --reason "not planned"
+          else
+            gh issue close "$ISSUE" --reason completed
+          fi
+
+      - name: Rebuild the site
+        if: steps.record.outputs.outcome == 'accepted' || steps.record.outputs.outcome == 'improved'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run pages.yml --ref main

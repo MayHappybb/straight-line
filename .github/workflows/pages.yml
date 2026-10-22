@@ -36,6 +36,15 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Leaderboard scores live on their own branch, written by the leaderboard workflow.
+      - name: Add the leaderboard
+        run: |
+          if git fetch --depth 1 origin leaderboard; then
+            git show FETCH_HEAD:leaderboard.json > dist/leaderboard.json
+          else
+            echo '{"entries":[]}' > dist/leaderboard.json
+          fi
+
       - uses: actions/configure-pages@v6.0.0
 
       - uses: actions/upload-pages-artifact@v5.0.0

@@ -97,6 +97,7 @@
         <div class="tabs" role="tablist" aria-label="Result views">
           <button role="tab" class="tab" aria-selected="true" aria-controls="tab-charts" id="t-charts">Telemetry</button>
           <button role="tab" class="tab" aria-selected="false" aria-controls="tab-eval" id="t-eval" tabindex="-1">Benchmark</button>
+          <button role="tab" class="tab" aria-selected="false" aria-controls="tab-lb" id="t-lb" tabindex="-1">Leaderboard</button>
           <button role="tab" class="tab" aria-selected="false" aria-controls="tab-docs" id="t-docs" tabindex="-1">How it works</button>
           <button role="tab" class="tab" aria-selected="false" aria-controls="tab-car" id="t-car" tabindex="-1">This car</button>
         </div>
@@ -111,6 +112,10 @@
 
         <div class="panel" role="tabpanel" id="tab-eval" aria-labelledby="t-eval" hidden>
           <div id="evalBody" class="eval-body"></div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="tab-lb" aria-labelledby="t-lb" hidden>
+          <div id="lbBody" class="lb-body"></div>
         </div>
 
         <div class="panel docs" role="tabpanel" id="tab-docs" aria-labelledby="t-docs" hidden>
@@ -136,6 +141,16 @@
             <dd>Scales everything random within a power-on: gyro and accelerometer noise, slow bias wander, the turn-on offset spread, the settling transient and the floor bumps. 1× is a realistic MPU-6050 on a hobby car. At 0× the sensor is noise-free, but the car's own errors (gyro offset, temperature drift, mismatched motors) are still there: those are not noise.</dd>
             <dt>Benchmark</dt>
             <dd>Runs cars 1 to 20 on the track length and noise you picked, each with a fixed power-on, so the same code always gets the same score and you can compare versions fairly.</dd>
+          </dl>
+
+          <h3>Scores</h3>
+          <dl class="realism">
+            <dt>Path RMSE</dt>
+            <dd>The root mean square of the car's distance from the line, measured at every centimetre of forward progress, over all runs. It rewards driving straight the whole way, not just crossing the finish in the right place. If a car leaves the track, stops with an error or runs out of time, the rest of the track counts as the off-track distance (a quarter of the track length, at least 1&nbsp;m). Benchmark and the leaderboard both rank by it.</dd>
+            <dt>Finish RMSE</dt>
+            <dd>The root mean square distance from the line where the car crosses the finish, with a car that does not finish counting as the off-track distance.</dd>
+            <dt>Leaderboard</dt>
+            <dd>Every submission is run on the same 30 hidden cars, each with its own power-on, on the 32&nbsp;m track at 1× noise. Nobody can see those cars, so there is nothing to tune to except driving straight. The code runs as standard Python 3 in a locked-down sandbox: it only receives IMU readings and only sets the motors. Only the standard library is available, here and there.</dd>
           </dl>
 
           <h3>Your program</h3>

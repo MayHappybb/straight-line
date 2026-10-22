@@ -944,6 +944,86 @@ table.data tbody tr.clickable:focus-visible {
   text-align: right;
 }
 
+/* ---- leaderboard ------------------------------------------------------------------------ */
+
+.lb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
+.lb-rules {
+  font-size: 15px;
+  font-weight: 600;
+  max-width: 46ch;
+}
+
+.lb-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lb-note {
+  max-width: 72ch;
+}
+
+.lb-empty {
+  padding: 24px 0;
+  color: var(--ink-2);
+}
+
+table.lb td.rank {
+  width: 2.5em;
+  text-align: right;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+table.lb tr.podium td.rank {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+table.lb td.main-num {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lb-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lb-user:hover {
+  text-decoration: underline;
+}
+
+.lb-user img,
+.lb-noavatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--paper-2);
+  flex: none;
+}
+
+table.lb a:not(.lb-user) {
+  color: var(--tape);
+}
+
 /* ---- docs ------------------------------------------------------------------------------- */
 
 .docs {
