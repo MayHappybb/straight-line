@@ -1,3 +1,21 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "user": "MayHappybb",
+      "avatar": "https://avatars.githubusercontent.com/u/58396860?v=4",
+      "pathRmseCm": 44.317,
+      "finishRmseCm": 103.735,
+      "finished": 30,
+      "runs": 30,
+      "issue": "https://github.com/MayHappybb/straight-line/issues/1",
+      "submittedAt": "2026-10-22T13:28:19Z",
+      "codeSha256": "ecdd91851cca35daa7e8800357375cc8d930db85cc4648f7f839afd279e8808c"
+    }
+  ],
+  "rules": {
+    "trackLength": 32,
+    "noise": 1,
+    "runs": 30
+  },
+  "updatedAt": "2026-10-22T13:28:19Z"
 }
