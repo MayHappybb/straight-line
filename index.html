@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Straight Line: make an imperfect car drive straight</title>
+    <meta name="description" content="A toy car with mismatched motors and a drifting MPU-6050 gyro. Write the Python controller in your browser and get it to the finish line on the tape." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23cfd1cb'/%3E%3Crect x='3' y='13' width='26' height='6' fill='%232f6bd8' opacity='.85'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="bar">
+      <h1 class="wordmark">Straight Line</h1>
+
+      <div class="bar-controls" role="toolbar" aria-label="Car and run controls">
+        <div class="stepper" title="Each car number is a different physical car: its own motors, wheels, battery and IMU unit">
+          <label for="carSeed">Car</label>
+          <button type="button" class="step" data-step="-1" aria-label="Previous car">−</button>
+          <input id="carSeed" type="number" min="1" max="99999" step="1" value="1" inputmode="numeric" />
+          <button type="button" class="step" data-step="1" aria-label="Next car">+</button>
+        </div>
+        <button id="run" class="btn primary" type="button" disabled>Loading Python…</button>
+        <button id="evaluate" class="btn" type="button" disabled>Evaluate 20 cars</button>
+        <button id="share" class="btn quiet" type="button">Copy share link</button>
+      </div>
+    </header>
+
+    <section class="conditions" aria-label="Test conditions">
+      <fieldset class="seg">
+        <legend>Track</legend>
+        <div class="seg-options" id="lengths"></div>
+      </fieldset>
+
+      <div class="noise">
+        <label for="noise">Noise</label>
+        <input id="noise" type="range" min="0" max="3" step="0.25" value="1" aria-describedby="noiseOut" />
+        <output id="noiseOut" for="noise">1× realistic</output>
+      </div>
+
+      <div class="poweron">
+        <label for="runSeed">Power-on</label>
+        <input id="runSeed" type="number" min="1" max="99999" step="1" inputmode="numeric" placeholder="new" />
+        <label class="check"><input id="repeat" type="checkbox" /> Repeat it</label>
+        <p class="poweron-note" id="powerOnNote">Each run switches the car on afresh.</p>
+      </div>
+    </section>
+
+    <section class="floor-wrap" aria-label="Track">
+      <canvas id="track" class="floor" role="img" aria-label="Top view of the lab floor, the tape line and the car's path"></canvas>
+      <div class="floor-foot">
+        <div class="playback">
+          <button id="play" class="btn round" type="button" aria-label="Play" disabled>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path id="playIcon" d="M4 2.5v11l9-5.5z" /></svg>
+          </button>
+          <select id="speed" aria-label="Playback speed">
+            <option value="0.25">0.25×</option>
+            <option value="1" selected>1×</option>
+            <option value="4">4×</option>
+          </select>
+          <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Playback position" disabled />
+          <output id="clock" class="clock">0.00 s</output>
+        </div>
+        <label class="zoom">
+          <span>Sideways scale</span>
+          <select id="zoom">
+            <option value="auto" selected>Fit</option>
+            <option value="1">True scale</option>
+            <option value="5">5×</option>
+            <option value="20">20×</option>
+            <option value="100">100×</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <main class="work">
+      <section class="code" aria-label="Controller">
+        <div class="code-head">
+          <h2>controller.py</h2>
+          <label class="examples">
+            <span class="sr-only">Load an example</span>
+            <select id="example"></select>
+          </label>
+        </div>
+        <div id="editor" class="editor"></div>
+        <div class="output">
+          <div class="output-head">
+            <h2>Output</h2>
+            <button id="clearConsole" class="btn tiny quiet" type="button">Clear</button>
+          </div>
+          <pre id="console" class="console" aria-live="polite"></pre>
+        </div>
+      </section>
+
+      <section class="results" aria-label="Results">
+        <div class="readout" id="tiles" aria-live="polite"></div>
+
+        <div class="tabs" role="tablist" aria-label="Result views">
+          <button role="tab" class="tab" aria-selected="true" aria-controls="tab-charts" id="t-charts">Telemetry</button>
+          <button role="tab" class="tab" aria-selected="false" aria-controls="tab-eval" id="t-eval" tabindex="-1">Benchmark</button>
+          <button role="tab" class="tab" aria-selected="false" aria-controls="tab-docs" id="t-docs" tabindex="-1">How it works</button>
+          <button role="tab" class="tab" aria-selected="false" aria-controls="tab-car" id="t-car" tabindex="-1">This car</button>
+        </div>
+
+        <div class="panel" role="tabpanel" id="tab-charts" aria-labelledby="t-charts">
+          <div class="panel-tools">
+            <p class="note">Hover a chart to read values. Click to move playback there.</p>
+            <button id="csv" class="btn tiny quiet" type="button" disabled>Download data (CSV)</button>
+          </div>
+          <div id="charts" class="charts"></div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="tab-eval" aria-labelledby="t-eval" hidden>
+          <div id="evalBody" class="eval-body"></div>
+        </div>
+
+        <div class="panel docs" role="tabpanel" id="tab-docs" aria-labelledby="t-docs" hidden>
+          <h3>The task</h3>
+          <p>
+            The car is switched on at <var>t</var>&nbsp;=&nbsp;0, standing still and pointing along the tape. Get it down the
+            floor and across the finish tape as close to the line as you can. The track is 4&nbsp;m unless you pick another
+            length. You get 20&nbsp;s plus 5&nbsp;s per metre of track, and the run stops if the car gets more than a quarter
+            of the track length off the line (at least 1&nbsp;m). Errors grow with distance, so a controller that stays
+            close on 16 or 32&nbsp;m is a better controller.
+          </p>
+          <p>
+            Your program sees the IMU and sets the two motors. There are no wheel encoders and no position.
+          </p>
+
+          <h3>Car, power-on and noise</h3>
+          <dl class="realism">
+            <dt>Car</dt>
+            <dd>A physical car. Its motors, wheels, battery and IMU unit are fixed: car 7 is always car 7, with the same gyro offset and the same lazy left motor.</dd>
+            <dt>Power-on</dt>
+            <dd>One time you switch the car on and let it go. Each one starts the gyro with a slightly different turn-on offset, leaves the caster at a different angle, finds the battery a little more or less charged and the room a little warmer or cooler, and draws a new sequence of sensor noise and floor bumps. Run gives you a new power-on every time, so the same car and code land somewhere slightly different, like on a real floor. Tick <em>Repeat it</em> to replay one power-on exactly, which is handy while debugging.</dd>
+            <dt>Noise</dt>
+            <dd>Scales everything random within a power-on: gyro and accelerometer noise, slow bias wander, the turn-on offset spread, the settling transient and the floor bumps. 1× is a realistic MPU-6050 on a hobby car. At 0× the sensor is noise-free, but the car's own errors (gyro offset, temperature drift, mismatched motors) are still there: those are not noise.</dd>
+            <dt>Benchmark</dt>
+            <dd>Runs cars 1 to 20 on the track length and noise you picked, each with a fixed power-on, so the same code always gets the same score and you can compare versions fairly.</dd>
+          </dl>
+
+          <h3>Your program</h3>
+          <p>Define <code>loop()</code>, and optionally <code>setup()</code>. These are ready to use, no imports needed:</p>
+          <dl class="api">
+            <dt><code>setup()</code></dt>
+            <dd>Called once at power-on.</dd>
+            <dt><code>loop()</code></dt>
+            <dd>Called at the loop rate, 100&nbsp;Hz unless you change it.</dd>
+            <dt><code>set_loop_rate(hz)</code></dt>
+            <dd>1 to 1000&nbsp;Hz.</dd>
+            <dt><code>now()</code></dt>
+            <dd>Seconds since power-on.</dd>
+            <dt><code>imu.gyro()</code></dt>
+            <dd>(x, y, z) angular rate in °/s. Positive z means turning left.</dd>
+            <dt><code>imu.accel()</code></dt>
+            <dd>(x, y, z) in g. x forward, y left, z up. Parked on a flat floor it reads about (0, 0, 1).</dd>
+            <dt><code>imu.temperature()</code></dt>
+            <dd>On-die temperature sensor, °C.</dd>
+            <dt><code>imu.read()</code></dt>
+            <dd>The whole latest sample: <code>t</code>, <code>seq</code>, <code>gyro</code>, <code>accel</code>, <code>temp</code>. <code>seq</code> goes up by one per new sample, so you can tell a fresh reading from a repeated one.</dd>
+            <dt><code>imu.configure(dlpf, rate, gyro_range, accel_range)</code></dt>
+            <dd>All optional. <code>dlpf</code>: 256, 188, 98, 42, 20, 10 or 5&nbsp;Hz low-pass. <code>rate</code>: output data rate in Hz (rounded to what the chip's divider can do). <code>gyro_range</code>: 250 to 2000&nbsp;°/s. <code>accel_range</code>: 2 to 16&nbsp;g. Returns the settings in effect. Power-on default: 256&nbsp;Hz filter, fastest rate, ±250&nbsp;°/s, ±2&nbsp;g.</dd>
+            <dt><code>motors.set(left, right)</code></dt>
+            <dd>Duty from −1.0 to 1.0, in steps of 0.001. It holds until you change it. 0 lets the motor coast.</dd>
+            <dt><code>motors.stop()</code></dt>
+            <dd>Same as <code>motors.set(0, 0)</code>.</dd>
+            <dt><code>plot(name, value)</code></dt>
+            <dd>Record a value over time. Each name gets its own chart, up to 8.</dd>
+            <dt><code>print(...)</code></dt>
+            <dd>Writes to Output, stamped with the time.</dd>
+          </dl>
+          <p class="note">Python 3 runs in your browser with the standard library (<code>math</code>, <code>collections</code>, <code>statistics</code>…). Nothing you write leaves this page unless you copy a share link.</p>
+
+          <h3>The car</h3>
+          <p>
+            What the parts list says: two TT gear motors (1:48, about 200&nbsp;rpm at 6&nbsp;V), 65&nbsp;mm wheels, 130&nbsp;mm
+            between the wheels, about 550&nbsp;g, a swivel caster at the back, an L298N-style motor driver that loses about
+            1.8&nbsp;V, a 2-cell Li-ion pack, and an MPU-6050 on a GY-521 board. Each real car is off from these numbers in
+            its own way.
+          </p>
+
+          <h3>What the simulation includes</h3>
+          <dl class="realism">
+            <dt>Motors</dt>
+            <dd>Back-EMF, winding resistance, gearbox friction and stiction (a dead band at low duty), rotor inertia, each motor with its own tolerances. The battery sags under load, and the driver drops voltage.</dd>
+            <dt>Wheels and chassis</dt>
+            <dd>Unequal and slightly out-of-round wheels, tyre slip with a traction limit (spin a wheel at launch and the heading jumps), rolling resistance, yaw inertia, a caster that starts at a random angle and shoves the car until it trails straight, floor texture, a slightly sloped floor.</dd>
+            <dt>Gyro</dt>
+            <dd>A zero-rate offset of up to a few °/s per unit, a different turn-on offset each power-on, drift with temperature as the board warms up and the motor driver heats, slow bias wander, white noise of about 0.005&nbsp;°/s/√Hz, scale and cross-axis error, mounting misalignment, a settling transient after power-on, and motor vibration: a tone at each motor's shaft speed that aliases if you filter wide and sample slowly, plus a bias shift while the motors run.</dd>
+            <dt>Accelerometer</dt>
+            <dd>Offsets, scale error, temperature drift, noise of about 400&nbsp;µg/√Hz, vibration, gravity from the floor slope.</dd>
+            <dt>Sampling</dt>
+            <dd>The low-pass filter as a 2nd-order filter, the chip's own sample clock error, 16-bit quantisation and saturation at the chosen range.</dd>
+          </dl>
+        </div>
+
+        <div class="panel" role="tabpanel" id="tab-car" aria-labelledby="t-car" hidden>
+          <div id="carBody" class="car-body"></div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
