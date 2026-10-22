@@ -10,7 +10,7 @@
     "prebuild": "npm run pyodide",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/"
+    "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "@codemirror/commands": "6.11.1",
