@@ -75,6 +75,16 @@ def now():
     return _state["t"]
 
 
+def track_length():
+    """Metres from the start to the finish line."""
+    return float(_hw.trackLength())
+
+
+def time_limit():
+    """Seconds from power-on to cross the finish line."""
+    return float(_hw.timeLimit())
+
+
 def set_loop_rate(hz):
     """How often loop() is called, 1 to 1000 Hz (default 100)."""
     hz = float(hz)
@@ -125,6 +135,8 @@ def _begin(code):
         "motors": Motors(),
         "now": now,
         "set_loop_rate": set_loop_rate,
+        "track_length": track_length,
+        "time_limit": time_limit,
         "log": log,
         "plot": plot,
         "print": _print,

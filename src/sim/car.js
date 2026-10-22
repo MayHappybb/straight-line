@@ -244,9 +244,19 @@ export class CarSim {
     const aSlope = G * Math.sin(c.slope) * Math.cos(c.slopeDir - this.psi);
     const Froll = c.rollResist * c.mass * G * moving;
 
-    this.vDot = (Fsum - Froll) / c.mass + aSlope;
-    this.v += this.vDot * dt;
-    this.r += (yawTorque / c.yawInertia) * dt;
+    // Static friction: with both wheels held by gearbox stiction and the car (almost) at rest, the
+    // tyres grip and the car stays put. Without this the slip-based tyre model lets a parked car
+    // creep down the slope and slowly turn, which a real car with stalled gear motors does not do.
+    const parked = s[0].w === 0 && s[1].w === 0 && Math.abs(this.v) < 2e-3 && Math.abs(this.r) < 2e-3;
+    if (parked) {
+      this.vDot = 0;
+      this.v = 0;
+      this.r = 0;
+    } else {
+      this.vDot = (Fsum - Froll) / c.mass + aSlope;
+      this.v += this.vDot * dt;
+      this.r += (yawTorque / c.yawInertia) * dt;
+    }
     this.psi += this.r * dt;
     this.x += this.v * Math.cos(this.psi) * dt;
     this.y += this.v * Math.sin(this.psi) * dt;

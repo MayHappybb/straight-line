@@ -183,3 +183,18 @@ test('track length sets the finish line and the rules', () => {
   assert.equal(makeTask(4).timeLimit, 40);
   assert.equal(makeTask(4).dnfPenaltyCm, 100);
 });
+
+test('a parked car stays exactly where it is, even on a sloped floor', () => {
+  for (const seed of [1, 2, 17]) {
+    const { trace } = runEpisode({ controller: jsController((hw) => hw.motor(0, 0)), carSeed: seed, trackLength: 2 });
+    assert.equal(trace.x.at(-1), 0);
+    assert.equal(trace.psi.at(-1), 0);
+  }
+});
+
+test('controllers can read the track length and time limit', async () => {
+  const py = await initPython(loadPyodide, {}, prelude);
+  const code = 'def setup():\n    print(track_length(), time_limit())\ndef loop():\n    pass\n';
+  const { logs } = runEpisode({ controller: py.controller(code), carSeed: 1, trackLength: 16, record: false });
+  assert.equal(logs[0].text, '16.0 100.0');
+});

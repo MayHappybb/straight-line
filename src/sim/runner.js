@@ -139,6 +139,8 @@ function* episode({ carSeed, runSeed = 0, noise = 1, trackLength = DEFAULT_TRACK
   };
 
   const hw = {
+    trackLength: TASK.trackLength,
+    timeLimit: TASK.timeLimit,
     motor(left, right) {
       dutyL = quantise(left);
       dutyR = quantise(right);

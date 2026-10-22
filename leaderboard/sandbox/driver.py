@@ -12,7 +12,7 @@
 #                    b"C" + 4 doubles                  configure request (-1 = leave as is)
 #                    b"E" + u32 length + utf-8 text    error (begin, setup or loop)
 #
-# Usage: python3 driver.py PRELUDE CONTROLLER
+# Usage: python3 driver.py PRELUDE CONTROLLER TRACK_LENGTH TIME_LIMIT
 
 import struct
 import sys
@@ -36,7 +36,8 @@ def read_exact(n):
 class Bridge:
     """The `_hw` module the prelude imports. Motor and loop-rate calls are batched per step."""
 
-    def __init__(self):
+    def __init__(self, track_length, time_limit):
+        self._track, self._limit = track_length, time_limit
         self.motor_set = False
         self.left = self.right = 0.0
         self.rate = None
@@ -55,6 +56,12 @@ class Bridge:
             raise SystemExit("protocol error: expected configure reply")
         d, r, g, a = CFG.unpack(read_exact(CFG.size))
         return types.SimpleNamespace(dlpf=int(d), rate=r, gyroRange=int(g), accelRange=int(a))
+
+    def trackLength(self):
+        return self._track
+
+    def timeLimit(self):
+        return self._limit
 
     def log(self, kind, text):
         pass  # output is not shown on the leaderboard
@@ -78,9 +85,9 @@ def send_error(text):
 
 def main():
     prelude_path, code_path = sys.argv[1], sys.argv[2]
-    bridge = Bridge()
+    bridge = Bridge(float(sys.argv[3]), float(sys.argv[4]))
     hw = types.ModuleType("_hw")
-    for name in ("motor", "setLoopRate", "configure", "log", "plot"):
+    for name in ("motor", "setLoopRate", "configure", "log", "plot", "trackLength", "timeLimit"):
         setattr(hw, name, getattr(bridge, name))
     sys.modules["_hw"] = hw
 

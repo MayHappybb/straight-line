@@ -14,6 +14,8 @@ export async function initPython(loadPyodide, options, preludeSrc) {
     configure: (a, b, c, d) => bridge.hw.configure(a, b, c, d),
     log: (kind, text) => bridge.hw.log(kind, text),
     plot: (name, v) => bridge.hw.plot(name, v),
+    trackLength: () => bridge.hw.trackLength,
+    timeLimit: () => bridge.hw.timeLimit,
   });
   py.runPython(preludeSrc);
   const fBegin = py.globals.get('_begin');

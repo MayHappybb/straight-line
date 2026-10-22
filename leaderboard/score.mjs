@@ -49,7 +49,8 @@ export class PipeController {
   begin(hw) {
     this.hw = hw;
     this.deadline = Date.now() + RUN_BUDGET_MS;
-    const p = (this.proc = spawn(this.command, this.args, { stdio: ['pipe', 'pipe', 'pipe'] }));
+    const args = [...this.args, String(hw.trackLength), String(hw.timeLimit)];
+    const p = (this.proc = spawn(this.command, args, { stdio: ['pipe', 'pipe', 'pipe'] }));
     p.stdout.on('data', (chunk) => {
       this.buf = this.buf.length ? Buffer.concat([this.buf, chunk]) : chunk;
       this.pump();
