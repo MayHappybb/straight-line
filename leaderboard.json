@@ -3,13 +3,13 @@
     {
       "user": "MayHappybb",
       "avatar": "https://avatars.githubusercontent.com/u/58396860?v=4",
-      "pathRmseCm": 44.317,
-      "finishRmseCm": 103.735,
+      "pathRmseCm": 43.752,
+      "finishRmseCm": 102.756,
       "finished": 30,
       "runs": 30,
-      "issue": "https://github.com/MayHappybb/straight-line/issues/1",
-      "submittedAt": "2026-10-22T13:28:19Z",
-      "codeSha256": "ecdd91851cca35daa7e8800357375cc8d930db85cc4648f7f839afd279e8808c"
+      "issue": "https://github.com/MayHappybb/straight-line/issues/2",
+      "submittedAt": "2026-10-23T00:36:10Z",
+      "codeSha256": "66cee2a585228fb68bdcacf8bc2326ed1d38f63398535529cb21670f839dcc99"
     }
   ],
   "rules": {
@@ -17,5 +17,5 @@
     "noise": 1,
     "runs": 30
   },
-  "updatedAt": "2026-10-22T13:28:19Z"
+  "updatedAt": "2026-10-23T00:36:10Z"
 }
