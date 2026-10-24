@@ -1,3 +1,4 @@
+import { onThemeChange } from './theme.js';
 // Small-multiple time-series charts on canvas: one y-axis each, shared time axis,
 // synchronised hover crosshair + tooltip, playback cursor, click-to-seek.
 
@@ -274,7 +275,7 @@ export class ChartGroup {
     this.onSeek = null;
     this.ro = new ResizeObserver(() => this.drawAll());
     this.ro.observe(container);
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.drawAll());
+    onThemeChange(() => this.drawAll());
   }
 
   /** specs: [{title, unit, series:[{name,color}], data:[{t,v}], digits}] */

@@ -1,13 +1,16 @@
-/* Straight Line: bench paper around a lab floor. The floor is the only loud thing. */
+/* Straight Line, in the sketchbook of mayhappybb.github.io: the shared kit (/kit/v1/sketch.css)
+   brings paper, ink, fonts, the site header and the pull-cord. The lab floor and the tape on it
+   are still the only loud things; the page around them is white or black paper. */
 
 :root {
   color-scheme: light;
-  --paper: #f2f3ef;
-  --paper-2: #e7e9e3;
-  --ink: #1f2422;
-  --ink-2: #545a56;
-  --ink-3: #868b86;
-  --rule: #d5d8d1;
+  --paper: #ffffff;
+  --paper-2: #f4f4f4;
+  --ink: #000000;
+  --ink-2: #444444;
+  --ink-3: #6e6e6e;
+  --rule: #d6d6d6;
+  --mark: #ffe45c;
   --tape: #2f6bd8;
   --tape-ink: #ffffff;
   --measure: #f2c230;
@@ -28,7 +31,8 @@
   --series-2: #eb6834;
   --series-ghost: #a9ada7;
 
-  --sans: 'Archivo Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sans: 'Klee One', 'LXGW WenKai', serif;
+  --hand: 'Gaegu', cursive;
   --mono: 'JetBrains Mono Variable', ui-monospace, Menlo, Consolas, monospace;
   font-family: var(--sans);
   font-size: 15px;
@@ -37,15 +41,16 @@
   background: var(--paper);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+@media all {
+  html.dark {
     color-scheme: dark;
-    --paper: #171918;
-    --paper-2: #1f2220;
-    --ink: #e8ebe7;
-    --ink-2: #b5bab4;
-    --ink-3: #7f847f;
-    --rule: #2e322f;
+    --paper: #000000;
+    --paper-2: #141414;
+    --ink: #f4f4f4;
+    --ink-2: #c4c4c4;
+    --ink-3: #9a9a9a;
+    --rule: #333333;
+    --mark: #5c5200;
     --tape: #4c86e8;
     --measure: #d9ae2b;
     --floor: #2b2d2b;
@@ -97,7 +102,7 @@ var {
 }
 
 :focus-visible {
-  outline: 2px solid var(--tape);
+  outline: 2px dashed var(--ink);
   outline-offset: 2px;
 }
 
@@ -110,8 +115,8 @@ select,
   font-size: 14px;
   color: var(--ink);
   background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px 7px 5px 8px / 7px 4px 8px 5px;   /* a hand-drawn box */
   height: 34px;
 }
 
@@ -121,31 +126,32 @@ select {
 
 .btn {
   padding: 0 14px;
-  font-weight: 600;
+  font-family: var(--hand);
+  font-size: 18px;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-  background: var(--paper-2);
-  border-color: transparent;
+  background: var(--paper);
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--ink-3);
+  background: var(--mark);
 }
 
 .btn.primary {
-  background: var(--tape);
-  color: var(--tape-ink);
+  background: var(--ink);
+  color: var(--paper);
   min-width: 96px;
 }
 
 .btn.primary:hover:not(:disabled) {
-  border-color: transparent;
-  filter: brightness(1.08);
+  background: var(--mark);
+  color: var(--ink);
 }
 
 .btn.quiet {
   background: transparent;
-  font-weight: 500;
+  border-color: transparent;
   color: var(--ink-2);
 }
 
@@ -189,10 +195,9 @@ select {
 /* the wordmark sits on a strip of painter's tape, like the line on the floor */
 .wordmark {
   position: relative;
-  font-size: 24px;
-  font-weight: 800;
-  font-stretch: 125%;
-  letter-spacing: -0.015em;
+  font-family: var(--hand);
+  font-size: 32px;
+  font-weight: 700;
   line-height: 1;
   padding: 0 4px;
   isolation: isolate;
@@ -1156,3 +1161,16 @@ details.spoiler[open] summary {
     forced-color-adjust: none;
   }
 }
+
+/* ---- sketchbook: the hand font for headings and big numbers ------------------------------- */
+h2, h3, .code-head h2, .output-head h2, .docs h3, .readout .value, .score .num {
+  font-family: var(--hand);
+  font-stretch: 100%;
+  letter-spacing: 0;
+}
+.code-head h2 { font-size: 20px; }
+.output-head h2 { font-size: 18px; }
+.docs h3 { font-size: 22px; }
+.readout .value small, .score .num small { font-family: var(--sans); }
+/* the site header from the kit sits above the toolbar */
+.sk-top { max-width: none; padding: 14px 24px 0; }

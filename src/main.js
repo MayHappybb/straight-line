@@ -1,4 +1,4 @@
-import '@fontsource-variable/archivo/wdth.css';
+import './ui/theme.js'; // white or black paper, shared with the main site
 import '@fontsource-variable/jetbrains-mono/wght.css';
 import './style.css';
 

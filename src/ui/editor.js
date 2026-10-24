@@ -5,15 +5,16 @@ import { indentWithTab } from '@codemirror/commands';
 import { indentUnit } from '@codemirror/language';
 import { python } from '@codemirror/lang-python';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { isDark, onThemeChange } from './theme.js';
 
 // Light theme drawn from the page tokens so the editor reads as part of the bench paper.
 const paper = EditorView.theme({
   '&': { backgroundColor: 'var(--paper)', color: 'var(--ink)' },
   '.cm-gutters': { backgroundColor: 'var(--paper)', color: 'var(--ink-3)', border: 'none' },
-  '.cm-activeLine': { backgroundColor: 'rgba(47,107,216,0.06)' },
+  '.cm-activeLine': { backgroundColor: 'rgba(255,228,92,0.18)' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--ink)' },
   '.cm-cursor': { borderLeftColor: 'var(--tape)', borderLeftWidth: '2px' },
-  '&.cm-focused .cm-selectionBackground, ::selection': { backgroundColor: 'rgba(47,107,216,0.2)' },
+  '&.cm-focused .cm-selectionBackground, ::selection': { backgroundColor: 'rgba(255,228,92,0.45)' },
 });
 
 // Earlier extensions take precedence, so the paper-coloured override goes before oneDark.
@@ -42,8 +43,7 @@ const base = EditorView.theme({
  */
 export function createEditor(parent, doc, handlers) {
   const theme = new Compartment();
-  const dark = matchMedia('(prefers-color-scheme: dark)');
-  const pick = () => (dark.matches ? night : paper);
+  const pick = () => (isDark() ? night : paper);
 
   const runKeys = Prec.highest(
     keymap.of([
@@ -69,7 +69,7 @@ export function createEditor(parent, doc, handlers) {
       EditorView.contentAttributes.of({ 'aria-label': 'controller.py source code' }),
     ],
   });
-  dark.addEventListener('change', () => view.dispatch({ effects: theme.reconfigure(pick()) }));
+  onThemeChange(() => view.dispatch({ effects: theme.reconfigure(pick()) }));
 
   return {
     get value() {

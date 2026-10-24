@@ -5,6 +5,7 @@
 
 import { niceTicks } from './charts.js';
 import { Rng } from '../sim/rng.js';
+import { isDark, onThemeChange } from './theme.js';
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 // Sideways stretch for Fit; below 1 the view is squeezed so a wide miss on a long track still fits.
@@ -27,7 +28,7 @@ export class TrackView {
       this.draw();
     });
     this.ro.observe(canvas);
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    onThemeChange(() => {
       this.texture = null;
       this.draw();
     });
@@ -81,7 +82,7 @@ export class TrackView {
     c.height = Math.round(H * dpr);
     const g = c.getContext('2d');
     g.scale(dpr, dpr);
-    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = isDark();
     g.fillStyle = css('--floor');
     g.fillRect(0, 0, W, H);
     const rng = new Rng(1234);
@@ -133,7 +134,7 @@ export class TrackView {
     g.drawImage(this.floorTexture(W, H, dpr), 0, 0);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = isDark();
     const ruleW = 46; // lateral measuring tape
     const tapeH = 26; // distance measuring tape
     const x0 = -0.32;
@@ -388,7 +389,7 @@ export class TrackView {
     const ang = Math.atan(zoom * Math.tan(psi));
     const b = this.car ? this.car.trackWidth : 0.13;
     const s = Math.max(sx, 54 / 0.24); // keep the glyph legible on narrow screens
-    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const dark = isDark();
     g.save();
     g.translate(X(x), Y(y));
     g.rotate(-ang);
