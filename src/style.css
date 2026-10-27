@@ -31,8 +31,8 @@
   --series-2: #eb6834;
   --series-ghost: #a9ada7;
 
-  --sans: 'Klee One', 'LXGW WenKai', serif;
-  --hand: 'Gaegu', cursive;
+  /* the kit defines --hand and --body (Gaegu / Klee One with their Chinese partners) */
+  --sans: var(--body, 'Klee One', serif);
   --mono: 'JetBrains Mono Variable', ui-monospace, Menlo, Consolas, monospace;
   font-family: var(--sans);
   font-size: 15px;
